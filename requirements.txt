@@ -1,0 +1,5 @@
+pyhive
+pymongo
+mysql-connector-python
+thrift
+thrift_sasl
