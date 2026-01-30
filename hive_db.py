@@ -1,19 +1,68 @@
-from pyhive import hive
-from TCLIService.ttypes import TApplicationException
+import sqlite3
+import os
+import csv
 import config
+
+# Mock Hive DB using SQLite
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "mock_hive.db")
+CSV_FILE_PATH = os.path.join(BASE_DIR, "student_course_grades.csv")
+
+def _get_connection():
+    conn = sqlite3.connect(DB_PATH)
+    return conn
+
+def _init_db():
+    """Initialize the SQLite DB and load data from CSV if table is empty"""
+    conn = _get_connection()
+    cursor = conn.cursor()
+    
+    # Create table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS student_grades1 (
+        student_id TEXT,
+        course_id TEXT,
+        roll_no TEXT,
+        email_id TEXT,
+        grade TEXT
+    )
+    """)
+    conn.commit()
+    
+    # Check if empty
+    cursor.execute("SELECT COUNT(*) FROM student_grades1")
+    count = cursor.fetchone()[0]
+    
+    if count == 0:
+        print(f"[MockHive] Initializing database from {CSV_FILE_PATH}...")
+        if os.path.exists(CSV_FILE_PATH):
+            with open(CSV_FILE_PATH, 'r') as file:
+                reader = csv.DictReader(file)
+                to_db = [(i['student-ID'], i['course-id'], i['roll no'], i['email ID'], i['grade']) for i in reader]
+                
+            cursor.executemany("INSERT INTO student_grades1 (student_id, course_id, roll_no, email_id, grade) VALUES (?, ?, ?, ?, ?)", to_db)
+            conn.commit()
+            print(f"[MockHive] Loaded {len(to_db)} records.")
+        else:
+            print(f"[MockHive] Warning: CSV file not found at {CSV_FILE_PATH}")
+    
+    conn.close()
+
+# Initialize DB on module load
+_init_db()
 
 def get_grade(student_id, course_id):
     try:
-        conn = hive.Connection(host=config.HIVE_HOST, port=config.HIVE_PORT, username=config.HIVE_USER, database=config.HIVE_DB)
+        conn = _get_connection()
         cursor = conn.cursor()
 
-        query = f"""
+        query = """
         SELECT grade
         FROM student_grades1
-        WHERE student_id = '{student_id}' AND course_id = '{course_id}'
+        WHERE student_id = ? AND course_id = ?
         LIMIT 1
         """
-        cursor.execute(query)
+        cursor.execute(query, (student_id, course_id))
         result = cursor.fetchone()
 
         if result:
@@ -23,26 +72,26 @@ def get_grade(student_id, course_id):
             print(f"No record found for ({student_id}, {course_id})")
             return False  # No record found, return False
 
-    except TApplicationException as err:
-        print(f"Hive Error: {err}")
+    except Exception as err:
+        print(f"Hive (Mock) Error: {err}")
         return False  # Return False on error
     finally:
-        cursor.close()
-        conn.close()
+        if 'conn' in locals():
+            conn.close()
 
 
 def set_grade(student_id, course_id, grade):
     try:
-        conn = hive.Connection(host=config.HIVE_HOST, port=config.HIVE_PORT, username=config.HIVE_USER, database=config.HIVE_DB)
+        conn = _get_connection()
         cursor = conn.cursor()
 
         # Check if the (student_id, course_id) pair exists
-        check_exist_query = f"""
+        check_exist_query = """
         SELECT COUNT(1)
         FROM student_grades1
-        WHERE student_id = '{student_id}' AND course_id = '{course_id}'
+        WHERE student_id = ? AND course_id = ?
         """
-        cursor.execute(check_exist_query)
+        cursor.execute(check_exist_query, (student_id, course_id))
         exists = cursor.fetchone()[0]
 
         # If the (student_id, course_id) pair doesn't exist, do nothing and return False
@@ -51,12 +100,12 @@ def set_grade(student_id, course_id, grade):
             return False  # No matching record found, return False
 
         # Check if the current grade is already the same as the new one
-        check_query = f"""
+        check_query = """
         SELECT grade
         FROM student_grades1
-        WHERE student_id = '{student_id}' AND course_id = '{course_id}'
+        WHERE student_id = ? AND course_id = ?
         """
-        cursor.execute(check_query)
+        cursor.execute(check_query, (student_id, course_id))
         current_grade = cursor.fetchone()
 
         # If the grade is already the same, skip the update and print no change
@@ -64,63 +113,27 @@ def set_grade(student_id, course_id, grade):
             print(f"No update needed for ({student_id}, {course_id}) as the grade is already '{grade}'")
             return False  # No update needed, return False
 
-        # Insert data into student_grades1 table with updated grade
-        insert_query = f"""
-        INSERT OVERWRITE TABLE student_grades1
-        SELECT student_id, course_id, roll_no, email_id, 
-               CASE WHEN student_id = '{student_id}' AND course_id = '{course_id}' THEN '{grade}' ELSE grade END
-        FROM student_grades1
+        # Update data
+        update_query = """
+        UPDATE student_grades1
+        SET grade = ?
+        WHERE student_id = ? AND course_id = ?
         """
-        cursor.execute(insert_query)
+        cursor.execute(update_query, (grade, student_id, course_id))
+        conn.commit()
         
         print(f"Updated grade for ({student_id}, {course_id}) to '{grade}'")
         return True  # Successful update
 
-    except TApplicationException as err:
-        print(f"Hive Error: {err}")
+    except Exception as err:
+        print(f"Hive (Mock) Error: {err}")
         return False  # Return False on error
     finally:
-        cursor.close()
-        conn.close()
-
+        if 'conn' in locals():
+            conn.close()
 
 if __name__ == "__main__":
-    # set_grade('SID9999','CSE020','H1')
-    # set_grade('SID1033','CSE016','C1')
-    
-    set_grade('SID9999','CSE020','C')
-    get_grade('SID1033','CSE016')
-    
-    
-
-# def set_grade(student_id, course_id, grade):
-#     try:
-#         conn = hive.Connection(host="localhost", port=10000, username="hadoop", database="db")
-#         cursor = conn.cursor()
-
-#         # Create a temporary table
-#         cursor.execute("CREATE TABLE IF NOT EXISTS grades_temp LIKE student_grades1")
-
-#         # Insert data into temp table with updated grade
-#         insert_query = f"""
-#         INSERT OVERWRITE TABLE student_grades1
-#         SELECT student_id, course_id, roll_no, email_id, 
-#                CASE WHEN student_id = '%s' AND course_id = '%s' THEN '%s' ELSE grade END
-#         FROM student_grades1
-#         """
-#         cursor.execute(insert_query)
-
-#         # Overwrite the original student_grades1 table with temp table
-#         cursor.execute("TRUNCATE TABLE student_grades1")
-#         cursor.execute("INSERT INTO TABLE student_grades1 SELECT * FROM grades_temp")
-
-#         # Optionally drop temp table
-#         cursor.execute("DROP TABLE grades_temp")
-
-#         print(f"Updated grade for ({student_id}, {course_id}) to '{grade}'")
-
-#     except TApplicationException as err:
-#         print(f"Hive Error: {err}")
-#     finally:
-#         cursor.close()
-#         conn.close()
+    # Test
+    get_grade('SID1033', 'CSE016')
+    set_grade('SID1033', 'CSE016', 'Z')
+    get_grade('SID1033', 'CSE016')

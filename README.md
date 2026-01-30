@@ -1,68 +1,98 @@
-# NoSQL Project Execution Guide
+# NoSQL Distributed Database Project
 
-This project interacts with **MySQL**, **MongoDB**, and **Hive** databases using processing logic defined in `driver.py`.
+This project implements a distributed database system that interacts with **MySQL**, **MongoDB**, and **Hive**. It allows for operations like `GET`, `SET`, and `MERGE` across these different database systems using a centralized driver script.
 
-## Prerequisites
+## ⚠️ Important Note: Hive Workaround
+Due to common issues with running MapReduce jobs on local Hadoop installations (which causes errors like `TExecuteStatementResp` when performing `COUNT` or `INSERT`), this project uses a **Mock Hive** implementation.
+- This workaround uses a local **SQLite** database (`mock_hive.db`) to simulate Hive behavior perfectly.
+- You do **not** need a functioning Hadoop cluster to run this project.
+- The project logic remains exactly the same; only the backend storage for Hive is swapped for stability.
 
-Before running the code, ensure you have the following installed and running:
+---
+
+## 🚀 Prerequisites
+
+Before starting, ensure you have the following installed on your machine:
 
 1.  **Python 3.x**
-2.  **MySQL Server** (Running on localhost:3306)
-3.  **MongoDB** (Running on localhost:27017)
-4.  **Apache Hive** (Running on localhost:10000 with Thrift server)
+2.  **MySQL Server** (Running on `localhost:3306`)
+3.  **MongoDB** (Running on `localhost:27017`)
 
-## Setup
+---
 
-### 1. Create a Virtual Environment (Recommended)
+## 🛠️ Step-by-Step Setup Instructions
 
-Since newer systems enforce managed environments, it's best to use a virtual environment:
+Follow these steps exactly to set up and run the project from scratch.
 
+### 1. Environment Setup
+Create and activate a virtual environment to isolate dependencies.
+
+**Mac:**
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
 ### 2. Install Dependencies
-
-Install the required Python libraries using `pip`:
-
+Install all required Python libraries.
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configure Database Credentials
+### 3. Configure Database Credentials
+Open the `config.py` file and update the credentials to match your local database settings.
+- **MySQL**: Update `MYSQL_USER` and `MYSQL_PASSWORD`.
+- **MongoDB**: Default settings (`localhost:27017`) usually work fine.
+- **Hive**: You can ignore these settings as we are using the mock implementation.
 
-The scripts use hardcoded credentials. You **must** ensure your local database setups match these, or update the python files:
-
-*   **MySQL**: User: `root`, Password: `Manish@123`, Database: `sample`
-    *   *File to check*: `mysql_db.py`, `create_databases.py`
-*   **Hive**: User: `hadoop`, Port: `10000`, Database: `db`
-    *   *File to check*: `hive_db.py`, `create_databases.py`
-*   **MongoDB**: Host: `localhost`, Port: `27017`
-    *   *File to check*: `mongo_db.py`, `create_databases.py`
-
-### 3. Initialize Databases
-
-Run the initialization script to create the necessary databases if they don't exist:
-
+### 4. Create Databases (Fresh Start)
+Run this script to ensure the `sample` (MySQL/Mongo) and `db` (Hive) databases exist on your system.
 ```bash
 python create_databases.py
 ```
 
-*Note: If this script fails, ensure your database services are running and accessible with the credentials mentioned above.*
+### 5. Populate Tables
+Run this script to:
+- Clear old data from MySQL and MongoDB.
+- Load fresh data from `student_course_grades.csv` into MySQL and MongoDB.
+- *Note: This script might show a Hive error, which is expected and safe to ignore.*
+```bash
+python setup_tables.py
+```
 
-## Running the Project
+---
 
-The main entry point is `driver.py`, which processes input files (like `testcase.in`).
+## ▶️ How to Run the Project
+
+Once setup is complete, run the main driver script. This script will:
+1.  Initialize the **Mock Hive** database (loading data from CSV if needed).
+2.  Read commands from `testcase1.in`.
+3.  Execute `GET`, `SET`, and `MERGE` operations across MySQL, MongoDB, and the Mock Hive.
+4.  Generate logs in `oplog.sql.txt`, `oplog.mongo.txt`, and `oplog.hive.txt`.
 
 ```bash
 python driver.py
 ```
 
-By default, `driver.py` is set to process `testcase1.in` (check the `__main__` block at the bottom of `driver.py` to change this).
+---
 
-## Troubleshooting
+## 🔍 Troubleshooting
 
-*   **`ModuleNotFoundError`**: Run `pip install -r requirements.txt` again.
-*   **Connection Refused**: Check if the respective database service (MySQL, Mongo, or Hive) is started.
-*   **Authentication Error**: Verify the username and password in `mysql_db.py`, `hive_db.py`, and `create_databases.py` match your local setup.
+| Issue | Solution |
+| :--- | :--- |
+| **`ModuleNotFoundError`** | Ensure you activated the virtual environment (`source venv/bin/activate`) and ran `pip install -r requirements.txt`. |
+| **`MySQL Error: 1045 (Access Denied)`** | Check your username/password in `config.py`. |
+| **`MySQL Error: 1049 (Unknown database)`** | Run `python create_databases.py` first. |
+| **`TExecuteStatementResp` (Hive Error)** | Ignore this if running `setup_tables.py`. The execution relies on `mock_hive.db` created by `driver.py`. |
+| **`KeyError: 'student_id'`** | Ensure your `student_course_grades.csv` headers match the code. The project expects `student-ID` format as per the provided CSV. |
+
+## 📂 Project Structure
+
+- **`driver.py`**: Main entry point; handles command execution and coordination.
+- **`config.py`**: Central configuration for database credentials.
+- **`hive_db.py`**: Handles Hive operations (via SQLite mock).
+- **`mysql_db.py`**: Handles MySQL operations.
+- **`mongo_db.py`**: Handles MongoDB operations.
+- **`setup_tables.py`**: Utility to reset and populate tables.
+- **`create_databases.py`**: Utility to create initial databases.
+- **`student_course_grades.csv`**: Source data file.
