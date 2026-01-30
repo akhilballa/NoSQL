@@ -2,14 +2,6 @@
 
 This project implements a distributed database system that interacts with **MySQL**, **MongoDB**, and **Hive**. It allows for operations like `GET`, `SET`, and `MERGE` across these different database systems using a centralized driver script.
 
-## ⚠️ Important Note: Hive Workaround
-Due to common issues with running MapReduce jobs on local Hadoop installations (which causes errors like `TExecuteStatementResp` when performing `COUNT` or `INSERT`), this project uses a **Mock Hive** implementation.
-- This workaround uses a local **SQLite** database (`mock_hive.db`) to simulate Hive behavior perfectly.
-- You do **not** need a functioning Hadoop cluster to run this project.
-- The project logic remains exactly the same; only the backend storage for Hive is swapped for stability.
-
----
-
 ## 🚀 Prerequisites
 
 Before starting, ensure you have the following installed on your machine:
